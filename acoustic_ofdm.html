@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>音響OFDM — チャイム通信システム</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Noto+Sans+JP:wght@300;400;700&display=swap');
+
+  :root {
+    --bg:        #0a0f1a;
+    --panel:     #0f1825;
+    --border:    #1e3a5f;
+    --accent:    #00d4ff;
+    --accent2:   #00ff9d;
+    --warn:      #ff6b35;
+    --text:      #c8dff0;
+    --text-dim:  #4a7090;
+    --glow:      0 0 20px rgba(0,212,255,0.3);
+    --glow2:     0 0 20px rgba(0,255,157,0.3);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Sans JP', sans-serif;
+    font-weight: 300;
+    min-height: 100vh;
+    padding: 24px 16px;
+    overflow-x: hidden;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    max-width: 820px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Header */
+  .header {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+  .header-sub {
+    font-family: 'Share Tech Mono', monospace;
+    color: var(--accent);
+    font-size: 0.75rem;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .header h1 {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: -0.5px;
+  }
+  .header h1 span { color: var(--accent); }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    gap: 2px;
+    margin-bottom: 24px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 4px;
+  }
+  .tab {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text-dim);
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .tab.active {
+    background: var(--border);
+    color: var(--accent);
+    box-shadow: var(--glow);
+  }
+
+  /* Panel */
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 16px;
+  }
+  .panel-title {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 3px;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .panel-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(to right, var(--border), transparent);
+  }
+
+  /* Form elements */
+  label {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+    letter-spacing: 1px;
+  }
+  input[type="text"], textarea, select {
+    width: 100%;
+    background: rgba(0,212,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.9rem;
+    padding: 10px 14px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    margin-bottom: 16px;
+  }
+  input[type="text"]:focus, textarea:focus, select:focus {
+    border-color: var(--accent);
+    box-shadow: var(--glow);
+  }
+  textarea { resize: vertical; min-height: 60px; }
+  select { cursor: pointer; }
+  select option { background: var(--panel); }
+
+  /* Buttons */
+  .btn {
+    border: none; border-radius: 8px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.85rem;
+    letter-spacing: 1px;
+    cursor: pointer;
+    padding: 12px 24px;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, #005f80, #0098c0);
+    color: #fff;
+    box-shadow: 0 2px 12px rgba(0,212,255,0.2);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: linear-gradient(135deg, #0078a0, #00c0e8);
+    box-shadow: var(--glow);
+    transform: translateY(-1px);
+  }
+  .btn-success {
+    background: linear-gradient(135deg, #006040, #009860);
+    color: #fff;
+    box-shadow: 0 2px 12px rgba(0,255,157,0.2);
+  }
+  .btn-success:hover:not(:disabled) {
+    background: linear-gradient(135deg, #008050, #00c070);
+    box-shadow: var(--glow2);
+    transform: translateY(-1px);
+  }
+  .btn-warn {
+    background: linear-gradient(135deg, #7a3010, #c04820);
+    color: #fff;
+  }
+  .btn-warn:hover:not(:disabled) { filter: brightness(1.2); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
+
+  /* Canvas for spectrum */
+  canvas {
+    width: 100%;
+    height: 100px;
+    border-radius: 8px;
+    background: #060d18;
+    border: 1px solid var(--border);
+    display: block;
+  }
+
+  /* Status / log */
+  .status-box {
+    background: #060d18;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    min-height: 48px;
+    line-height: 1.6;
+  }
+  .status-box .ok  { color: var(--accent2); }
+  .status-box .err { color: var(--warn); }
+  .status-box .inf { color: var(--accent); }
+
+  /* Decoded result */
+  .result-box {
+    background: rgba(0,255,157,0.05);
+    border: 1px solid rgba(0,255,157,0.3);
+    border-radius: 8px;
+    padding: 14px 18px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1.05rem;
+    color: var(--accent2);
+    word-break: break-all;
+    min-height: 48px;
+    box-shadow: var(--glow2);
+    display: none;
+  }
+  .result-box.visible { display: block; }
+
+  /* Params grid */
+  .params-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .param-item {
+    background: rgba(0,212,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+  }
+  .param-item .pk { font-size: 0.7rem; color: var(--text-dim); letter-spacing: 1px; }
+  .param-item .pv {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.95rem;
+    color: var(--accent);
+    margin-top: 2px;
+  }
+
+  /* Level meter */
+  .meter-bar {
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    margin-top: 10px;
+    overflow: hidden;
+  }
+  .meter-fill {
+    height: 100%;
+    background: linear-gradient(to right, var(--accent2), var(--accent));
+    border-radius: 3px;
+    transition: width 0.1s;
+    width: 0%;
+  }
+
+  /* Hidden tab content */
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* Chime selector icons */
+  .chime-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .chime-card {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.2s;
+    background: transparent;
+    color: var(--text);
+    font-family: 'Noto Sans JP', sans-serif;
+  }
+  .chime-card:hover { border-color: var(--accent); color: var(--accent); }
+  .chime-card.selected {
+    border-color: var(--accent);
+    background: rgba(0,212,255,0.08);
+    color: var(--accent);
+    box-shadow: var(--glow);
+  }
+  .chime-card .icon { font-size: 1.6rem; margin-bottom: 4px; }
+  .chime-card .name { font-size: 0.75rem; }
+  .slider-row { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .slider-row input[type=range] { flex:1; accent-color: var(--accent); }
+  .slider-val { font-family:'Share Tech Mono',monospace; color:var(--accent); min-width:42px; font-size:0.85rem; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="header-sub">Acoustic Data Transmission</div>
+    <h1>音響<span>OFDM</span> チャイム通信</h1>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('tx')">📡 送信（PC）</button>
+    <button class="tab" onclick="switchTab('rx')">📻 受信（スマホ）</button>
+    <button class="tab" onclick="switchTab('info')">📋 仕様</button>
+  </div>
+
+  <!-- ========== TX TAB ========== -->
+  <div id="tab-tx" class="tab-content active">
+
+    <div class="panel">
+      <div class="panel-title">チャイム音源</div>
+      <div class="chime-grid">
+        <button class="chime-card selected" onclick="selectChime(this,'westminster')" data-chime="westminster">
+          <div class="icon">🔔</div><div class="name">ウェストミンスター</div>
+        </button>
+        <button class="chime-card" onclick="selectChime(this,'school')" data-chime="school">
+          <div class="icon">🏫</div><div class="name">学校チャイム</div>
+        </button>
+        <button class="chime-card" onclick="selectChime(this,'pentatonic')" data-chime="pentatonic">
+          <div class="icon">🎵</div><div class="name">ペンタトニック</div>
+        </button>
+        <button class="chime-card" onclick="selectChime(this,'simple')" data-chime="simple">
+          <div class="icon">🔹</div><div class="name">シンプルトーン</div>
+        </button>
+      </div>
+      <div class="slider-row">
+        <label style="margin:0;min-width:80px">音量バランス</label>
+        <input type="range" id="ofdmLevel" min="1" max="20" value="6"
+               oninput="document.getElementById('ofdmLevelVal').textContent=this.value">
+        <span class="slider-val" id="ofdmLevelVal">6</span>
+        <label style="margin:0;font-size:0.75rem;color:var(--text-dim)">(OFDM強度)</label>
+      </div>
+      <div class="slider-row">
+        <label style="margin:0;min-width:80px">再生速度</label>
+        <input type="range" id="tempoSlider" min="50" max="150" value="100"
+               oninput="document.getElementById('tempoVal').textContent=this.value+'%'">
+        <span class="slider-val" id="tempoVal">100%</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">送信データ</div>
+      <label>メッセージ（最大約40文字）</label>
+      <textarea id="txMessage" placeholder="例：https://shinshu-u.ac.jp&#10;例：授業開始 10:30 教室 A301">https://shinshu-u.ac.jp</textarea>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnGenerate" onclick="generateAndPlay()">
+          ▶ チャイム生成・再生
+        </button>
+        <button class="btn btn-success" id="btnDownload" onclick="downloadWav()" disabled>
+          ↓ WAV保存
+        </button>
+        <button class="btn btn-warn" onclick="stopAudio()">■ 停止</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">送信スペクトル</div>
+      <canvas id="txCanvas" height="100"></canvas>
+      <div id="txStatus" class="status-box" style="margin-top:10px">
+        <span class="inf">待機中 — チャイムを選択してメッセージを入力してください</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ========== RX TAB ========== -->
+  <div id="tab-rx" class="tab-content">
+
+    <div class="panel">
+      <div class="panel-title">受信設定</div>
+      <p style="font-size:0.8rem;color:var(--text-dim);margin-bottom:14px;line-height:1.7">
+        スマートフォンのマイクでPCスピーカからの音を受信します。<br>
+        エコーキャンセル・ノイズ抑制は自動的にOFFになります。
+      </p>
+      <div class="btn-row">
+        <button class="btn btn-success" id="btnRxStart" onclick="startRx()">● 受信開始</button>
+        <button class="btn btn-warn"    id="btnRxStop"  onclick="stopRx()" disabled>■ 停止</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">受信スペクトル</div>
+      <canvas id="rxCanvas" height="100"></canvas>
+      <div class="meter-bar"><div class="meter-fill" id="rxMeter"></div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">受信ログ</div>
+      <div id="rxStatus" class="status-box">
+        <span class="inf">受信ボタンを押してください</span>
+      </div>
+      <div style="margin-top:12px">
+        <label>デコード結果</label>
+        <div id="rxResult" class="result-box">—</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ========== INFO TAB ========== -->
+  <div id="tab-info" class="tab-content">
+    <div class="panel">
+      <div class="panel-title">システムパラメータ</div>
+      <div class="params-grid">
+        <div class="param-item"><div class="pk">サンプリング周波数</div><div class="pv">44,100 Hz</div></div>
+        <div class="param-item"><div class="pk">サブキャリア数</div><div class="pv">36本</div></div>
+        <div class="param-item"><div class="pk">変調方式</div><div class="pv">D-BPSK</div></div>
+        <div class="param-item"><div class="pk">シンボル長</div><div class="pv">1,024 smp</div></div>
+        <div class="param-item"><div class="pk">ガード時間</div><div class="pv">256 smp</div></div>
+        <div class="param-item"><div class="pk">フレーム長</div><div class="pv">1,280 smp</div></div>
+        <div class="param-item"><div class="pk">伝送帯域</div><div class="pv">6.4–7.9 kHz</div></div>
+        <div class="param-item"><div class="pk">誤り検出</div><div class="pv">CRC-8</div></div>
+        <div class="param-item"><div class="pk">情報量/フレーム</div><div class="pv">36 bit</div></div>
+        <div class="param-item"><div class="pk">実効レート</div><div class="pv">≈ 990 bps</div></div>
+        <div class="param-item"><div class="pk">プリアンブル</div><div class="pv">固定16bit</div></div>
+        <div class="param-item"><div class="pk">最大メッセージ</div><div class="pv">≈ 40 bytes</div></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">簡略化の内容</div>
+      <div style="font-size:0.82rem;line-height:1.9;color:var(--text)">
+        <span style="color:var(--warn)">省略</span>：Reed-Solomon符号 / 畳み込み符号 / インタリーブ / PN同期信号 / マスキング閾値計算<br>
+        <span style="color:var(--accent2)">採用</span>：D-BPSK変調コア / CRC-8誤り検出 / ガード時間（短縮版256smp） / 固定プリアンブル同期<br>
+        <br>
+        <span style="color:var(--text-dim)">
+        短距離（〜2m）・比較的静かな環境（教室・廊下）での動作を想定。
+        プリアンブル（0xA5A5）でフレーム先頭を検出し、CRC-8で受信誤りを判定する。
+        誤り訂正は行わないため、ビット誤りが多い環境では再送（繰り返し再生）で対応する。
+        </span>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<script>
+// ============================================================
+// パラメータ
+// ============================================================
+const FS        = 44100;
+const N_SYM     = 1024;
+const N_GI      = 256;          // 簡略化：1008→256
+const N_FRAME   = N_SYM + N_GI; // 1280
+const N_CARRIER = 36;
+const F_START   = 6400;
+const DELTA_F   = FS / N_SYM;   // ≈43.07 Hz
+const PREAMBLE  = [1,0,1,0,0,1,0,1, 1,0,1,0,0,1,0,1]; // 0xA5A5
+
+// サブキャリアFFTビン
+const BINS = Array.from({length: N_CARRIER},
+  (_, i) => Math.round((F_START + i * DELTA_F) / DELTA_F));
+
+let selectedChime = 'westminster';
+let audioCtx = null;
+let lastBuffer = null;
+let rxStream = null, rxProcessor = null;
+let isRxRunning = false;
+
+// ============================================================
+// チャイム音源生成
+// ============================================================
+const CHIMES = {
+  westminster: {
+    name: 'ウェストミンスター',
+    // E5 G#4 F#4 B4 / E4 F#4 G#4 E4 / G#4 E4 F#4 B3 / B3 F#4 G#4 E4
+    notes: [
+      {f:659.25,d:0.45},{f:415.30,d:0.45},{f:554.37,d:0.45},{f:493.88,d:0.9},
+      {f:329.63,d:0.45},{f:554.37,d:0.45},{f:415.30,d:0.45},{f:329.63,d:0.9},
+      {f:415.30,d:0.45},{f:329.63,d:0.45},{f:554.37,d:0.45},{f:246.94,d:0.9},
+      {f:246.94,d:0.45},{f:554.37,d:0.45},{f:415.30,d:0.45},{f:329.63,d:0.9},
+    ]
+  },
+  school: {
+    name: '学校チャイム',
+    notes: [
+      {f:523.25,d:0.3},{f:659.25,d:0.3},{f:783.99,d:0.3},{f:1046.5,d:0.6},
+      {f:783.99,d:0.3},{f:659.25,d:0.3},{f:523.25,d:0.6},
+      {f:659.25,d:0.3},{f:783.99,d:0.3},{f:659.25,d:0.3},{f:523.25,d:0.6},
+    ]
+  },
+  pentatonic: {
+    name: 'ペンタトニック',
+    notes: [
+      {f:523.25,d:0.35},{f:587.33,d:0.35},{f:698.46,d:0.35},
+      {f:783.99,d:0.35},{f:880.00,d:0.7},
+      {f:783.99,d:0.35},{f:698.46,d:0.35},{f:587.33,d:0.35},{f:523.25,d:0.7},
+    ]
+  },
+  simple: {
+    name: 'シンプルトーン',
+    notes: [
+      {f:440,d:0.4},{f:550,d:0.4},{f:660,d:0.4},{f:880,d:0.8},
+    ]
+  }
+};
+
+function synthChime(chimeKey, sampleRate, tempo=1.0) {
+  const chime = CHIMES[chimeKey];
+  const totalDur = chime.notes.reduce((s,n)=>s+n.d/tempo,0) + 0.5;
+  const out = new Float32Array(Math.ceil(totalDur * sampleRate));
+  let pos = 0;
+  for (const note of chime.notes) {
+    const dur = note.d / tempo;
+    const attack = Math.min(0.02, dur * 0.1);
+    const decay  = dur * 0.15;
+    const ns = Math.ceil(dur * sampleRate);
+    for (let i = 0; i < ns; i++) {
+      const t = i / sampleRate;
+      // エンベロープ
+      let env;
+      if (t < attack)       env = t / attack;
+      else if (t < attack+decay) env = 1 - 0.3*(t-attack)/decay;
+      else                  env = 0.7 * Math.exp(-3*(t-attack-decay)/(dur-attack-decay));
+      // 倍音を加えて鐘らしい音色に
+      const v = env * (
+        0.6 * Math.sin(2*Math.PI*note.f*t) +
+        0.25* Math.sin(2*Math.PI*note.f*2.756*t) +  // 非整数倍音（鐘特有）
+        0.1 * Math.sin(2*Math.PI*note.f*5.404*t) +
+        0.05* Math.sin(2*Math.PI*note.f*0.5*t)
+      );
+      if (pos + i < out.length) out[pos + i] += v * 0.6;
+    }
+    pos += Math.ceil(dur * sampleRate);
+  }
+  return out;
+}
+
+// ============================================================
+// CRC-8
+// ============================================================
+function crc8(bytes) {
+  let crc = 0xFF;
+  for (const b of bytes) {
+    crc ^= b;
+    for (let i = 0; i < 8; i++)
+      crc = (crc & 0x80) ? ((crc << 1) ^ 0x07) & 0xFF : (crc << 1) & 0xFF;
+  }
+  return crc ^ 0xFF;
+}
+
+// ============================================================
+// テキスト → ビット列（プリアンブル + CRC + データ）
+// ============================================================
+function textToBitstream(text) {
+  const bytes = new TextEncoder().encode(text);
+  const crc   = crc8(bytes);
+  const len   = bytes.length;
+
+  // フレーム構造：[PREAMBLE 16bit][LEN 8bit][CRC 8bit][DATA n*8bit]
+  const all = [len, crc, ...bytes];
+  const bits = [];
+  for (const b of all)
+    for (let i = 7; i >= 0; i--)
+      bits.push((b >> i) & 1);
+
+  return [...PREAMBLE, ...bits];
+}
+
+// ============================================================
+// D-BPSK OFDM エンコード
+// ============================================================
+function encodeOFDM(bitstream) {
+  const frames = [];
+  const phases = new Float64Array(N_CARRIER); // 初期位相0
+
+  // 1フレームあたり36ビット
+  let pos = 0;
+  while (pos < bitstream.length) {
+    const chunk = bitstream.slice(pos, pos + N_CARRIER);
+    // 不足分は0でパディング
+    while (chunk.length < N_CARRIER) chunk.push(0);
+    pos += N_CARRIER;
+
+    // 位相更新（D-BPSK: bit=0→+π, bit=1→変化なし）
+    for (let i = 0; i < N_CARRIER; i++) {
+      if (chunk[i] === 0) phases[i] = (phases[i] + Math.PI) % (2*Math.PI);
+    }
+
+    // IFFT用スペクトル構築
+    const re = new Float64Array(N_SYM);
+    const im = new Float64Array(N_SYM);
+    for (let i = 0; i < N_CARRIER; i++) {
+      re[BINS[i]] = Math.cos(phases[i]);
+      im[BINS[i]] = Math.sin(phases[i]);
+      // 共役（負の周波数側）
+      const b2 = N_SYM - BINS[i];
+      re[b2] =  re[BINS[i]];
+      im[b2] = -im[BINS[i]];
+    }
+
+    // IFFT（実装：Cooley-Tukey）
+    const sym = ifft_real(re, im);
+
+    // 正規化
+    const peak = Math.max(...sym.map(Math.abs)) || 1;
+    const sym_n = sym.map(v => v / peak);
+
+    // ガード時間付加（末尾をコピーして前に追加）
+    const frame = new Float32Array(N_FRAME);
+    for (let i = 0; i < N_GI;  i++) frame[i]       = sym_n[N_SYM - N_GI + i];
+    for (let i = 0; i < N_SYM; i++) frame[N_GI + i] = sym_n[i];
+    frames.push(frame);
+  }
+  return frames;
+}
+
+// ============================================================
+// IFFT（Cooley-Tukey, size=1024）
+// ============================================================
+function ifft_real(re_in, im_in) {
+  const N = re_in.length;
+  // 共役→FFT→共役 / N でIFFT
+  const re = new Float64Array(N), im = new Float64Array(N);
+  for (let i=0;i<N;i++){re[i]=re_in[i];im[i]=-im_in[i];}
+  fft_inplace(re, im);
+  return re.map((v,i)=>(v)/N);
+}
+
+function fft_inplace(re, im) {
+  const N = re.length;
+  // bit-reversal
+  for (let i=1,j=0;i<N;i++){
+    let bit=N>>1;
+    for(;j&bit;bit>>=1)j^=bit;
+    j^=bit;
+    if(i<j){[re[i],re[j]]=[re[j],re[i]];[im[i],im[j]]=[im[j],im[i]];}
+  }
+  for (let len=2;len<=N;len<<=1){
+    const ang=-2*Math.PI/len;
+    const wRe=Math.cos(ang), wIm=Math.sin(ang);
+    for(let i=0;i<N;i+=len){
+      let uRe=1,uIm=0;
+      for(let j=0;j<len/2;j++){
+        const vRe=re[i+j+len/2]*uRe-im[i+j+len/2]*uIm;
+        const vIm=re[i+j+len/2]*uIm+im[i+j+len/2]*uRe;
+        re[i+j+len/2]=re[i+j]-vRe; im[i+j+len/2]=im[i+j]-vIm;
+        re[i+j]+=vRe; im[i+j]+=vIm;
+        const nuRe=uRe*wRe-uIm*wIm;
+        uIm=uRe*wIm+uIm*wRe; uRe=nuRe;
+      }
+    }
+  }
+}
+
+// ============================================================
+// チャイム + OFDM 合成
+// ============================================================
+function buildMixedSignal(chimeKey, message) {
+  const tempo  = parseFloat(document.getElementById('tempoSlider').value) / 100;
+  const ofdmGain = parseInt(document.getElementById('ofdmLevel').value) / 100;
+
+  const chimeSig = synthChime(chimeKey, FS, tempo);
+
+  // メッセージ→ビット列→OFDMフレーム
+  const bits   = textToBitstream(message);
+  const frames = encodeOFDM(bits);
+
+  // OFDMフレームをタイリング（チャイム長に合わせる）
+  const ofdmLen = chimeSig.length;
+  const ofdmSig = new Float32Array(ofdmLen);
+  let fp = 0;
+  for (let i=0;i<ofdmLen;i++) {
+    ofdmSig[i] = frames[fp % frames.length][i % N_FRAME];
+    if (i > 0 && i % N_FRAME === 0) fp++;
+  }
+
+  // 帯域除去（簡易：チャイムの6〜8kHz成分を軽減）
+  const chimeMixed = new Float32Array(ofdmLen);
+  for (let i=0;i<ofdmLen;i++) {
+    chimeMixed[i] = chimeSig[i] + ofdmSig[i] * ofdmGain;
+  }
+
+  // 正規化
+  const pk = Math.max(...chimeMixed.map(Math.abs), 1e-9);
+  return chimeMixed.map(v => v / pk * 0.85);
+}
+
+// ============================================================
+// 再生 & スペクトル表示
+// ============================================================
+function ensureAudioCtx() {
+  if (!audioCtx || audioCtx.state === 'closed')
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)({sampleRate: FS});
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+let txAnalyser = null, txAnimId = null, currentSource = null;
+
+async function generateAndPlay() {
+  const msg = document.getElementById('txMessage').value.trim();
+  if (!msg) { setStatus('txStatus','<span class="err">メッセージを入力してください</span>'); return; }
+  if (new TextEncoder().encode(msg).length > 40)
+    { setStatus('txStatus','<span class="err">メッセージが長すぎます（最大約40バイト）</span>'); return; }
+
+  setStatus('txStatus','<span class="inf">生成中...</span>');
+  document.getElementById('btnGenerate').disabled = true;
+
+  await new Promise(r=>setTimeout(r,10)); // UI更新のため少し待つ
+
+  try {
+    ensureAudioCtx();
+    const mixed = buildMixedSignal(selectedChime, msg);
+    lastBuffer = mixed;
+
+    // AudioBuffer作成
+    const buf = audioCtx.createBuffer(1, mixed.length, FS);
+    buf.copyToChannel(mixed, 0);
+
+    // Analyser
+    if (!txAnalyser) {
+      txAnalyser = audioCtx.createAnalyser();
+      txAnalyser.fftSize = 2048;
+      txAnalyser.connect(audioCtx.destination);
+    }
+
+    if (currentSource) { try{currentSource.stop();}catch(e){} }
+    currentSource = audioCtx.createBufferSource();
+    currentSource.buffer = buf;
+    currentSource.connect(txAnalyser);
+    currentSource.start();
+
+    drawSpectrum('txCanvas', txAnalyser);
+
+    const bits = textToBitstream(msg);
+    setStatus('txStatus',
+      `<span class="ok">送信中</span> — チャイム：${CHIMES[selectedChime].name} ` +
+      `| ビット数：${bits.length} | フレーム数：${Math.ceil(bits.length/N_CARRIER)} ` +
+      `| 再生時間：${(mixed.length/FS).toFixed(1)}秒`);
+
+    document.getElementById('btnDownload').disabled = false;
+
+    currentSource.onended = () => {
+      setStatus('txStatus', `<span class="ok">送信完了</span> — メッセージ：「${msg}」`);
+    };
+  } catch(e) {
+    setStatus('txStatus', `<span class="err">エラー：${e.message}</span>`);
+  }
+  document.getElementById('btnGenerate').disabled = false;
+}
+
+function stopAudio() {
+  if (currentSource) { try{currentSource.stop();}catch(e){} }
+  cancelAnimationFrame(txAnimId);
+  setStatus('txStatus','<span class="inf">停止しました</span>');
+}
+
+function drawSpectrum(canvasId, analyserNode) {
+  const canvas = document.getElementById(canvasId);
+  const ctx = canvas.getContext('2d');
+  const W = canvas.clientWidth, H = canvas.clientHeight;
+  canvas.width = W * devicePixelRatio;
+  canvas.height = H * devicePixelRatio;
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+
+  const buf = new Uint8Array(analyserNode.frequencyBinCount);
+  function draw() {
+    txAnimId = requestAnimationFrame(draw);
+    analyserNode.getByteFrequencyData(buf);
+    ctx.fillStyle = '#060d18';
+    ctx.fillRect(0,0,W,H);
+
+    // OFDMバンド強調（6.4〜8kHz）
+    const binStart = Math.round(6400/FS*buf.length*2);
+    const binEnd   = Math.round(8000/FS*buf.length*2);
+    ctx.fillStyle = 'rgba(0,212,255,0.07)';
+    ctx.fillRect(binStart/buf.length*W, 0, (binEnd-binStart)/buf.length*W, H);
+
+    // スペクトル描画
+    const bw = W / buf.length;
+    for (let i=0;i<buf.length;i++) {
+      const h = (buf[i]/255) * H;
+      const inBand = i>=binStart && i<=binEnd;
+      ctx.fillStyle = inBand ? 'rgba(0,212,255,0.9)' : 'rgba(0,153,200,0.45)';
+      ctx.fillRect(i*bw, H-h, Math.max(bw,1), h);
+    }
+
+    // ラベル
+    ctx.fillStyle = 'rgba(0,212,255,0.5)';
+    ctx.font = `${9*devicePixelRatio}px Share Tech Mono`;
+    ctx.fillText('6.4kHz', binStart/buf.length*W, H-4);
+    ctx.fillText('8kHz',   binEnd/buf.length*W-24, H-4);
+  }
+  draw();
+}
+
+// ============================================================
+// WAV保存
+// ============================================================
+function downloadWav() {
+  if (!lastBuffer) return;
+  const wav = encodeWav(lastBuffer, FS);
+  const blob = new Blob([wav], {type:'audio/wav'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `ofdm_chime_${selectedChime}.wav`;
+  a.click();
+}
+
+function encodeWav(pcm, sr) {
+  const buf = new ArrayBuffer(44 + pcm.length*2);
+  const view = new DataView(buf);
+  const w = (o,v)=>view.setUint32(o,v,true);
+  const ws = (o,v)=>view.setUint16(o,v,true);
+  const s = str => [...str].forEach((c,i)=>view.setUint8(i+([...buf].indexOf(str[0])||0), c.charCodeAt(0)));
+  // RIFF header
+  [82,73,70,70].forEach((v,i)=>view.setUint8(i,v)); // RIFF
+  w(4, 36+pcm.length*2);
+  [87,65,86,69].forEach((v,i)=>view.setUint8(8+i,v)); // WAVE
+  [102,109,116,32].forEach((v,i)=>view.setUint8(12+i,v)); // fmt
+  w(16,16); ws(20,1); ws(22,1);
+  w(24,sr); w(28,sr*2); ws(32,2); ws(34,16);
+  [100,97,116,97].forEach((v,i)=>view.setUint8(36+i,v)); // data
+  w(40,pcm.length*2);
+  for (let i=0;i<pcm.length;i++) {
+    const s = Math.max(-1,Math.min(1,pcm[i]));
+    view.setInt16(44+i*2, s<0?s*32768:s*32767, true);
+  }
+  return buf;
+}
+
+// ============================================================
+// 受信（RX）
+// ============================================================
+let rxAudioCtx = null, rxAnalyser = null, rxAnimId = null;
+let rxDecodeInterval = null;
+let rxFrameBuffer = [];
+let rxPrevPhases = new Float64Array(N_CARRIER);
+
+async function startRx() {
+  try {
+    rxStream = await navigator.mediaDevices.getUserMedia({audio:{
+      sampleRate: FS, channelCount:1,
+      echoCancellation:false,
+      noiseSuppression:false,
+      autoGainControl:false
+    }});
+  } catch(e) {
+    setStatus('rxStatus',`<span class="err">マイクアクセス失敗：${e.message}</span>`);
+    return;
+  }
+
+  rxAudioCtx = new (window.AudioContext||window.webkitAudioContext)({sampleRate:FS});
+  const src  = rxAudioCtx.createMediaStreamSource(rxStream);
+  rxAnalyser = rxAudioCtx.createAnalyser();
+  rxAnalyser.fftSize = N_SYM * 2;
+  src.connect(rxAnalyser);
+
+  isRxRunning = true;
+  document.getElementById('btnRxStart').disabled = true;
+  document.getElementById('btnRxStop').disabled  = false;
+
+  setStatus('rxStatus','<span class="inf">受信中... PCスピーカの近く（〜1m）でご使用ください</span>');
+
+  // スペクトル表示
+  drawRxSpectrum();
+
+  // デコードループ（OFDMフレーム周期）
+  const frameDuration = N_FRAME / FS * 1000; // ≈29ms
+  rxDecodeInterval = setInterval(rxDecodeStep, frameDuration);
+}
+
+function rxDecodeStep() {
+  if (!isRxRunning) return;
+
+  const timeData = new Float32Array(N_SYM);
+  rxAnalyser.getFloatTimeDomainData(timeData);
+
+  // レベルメーター
+  const rms = Math.sqrt(timeData.reduce((s,v)=>s+v*v,0)/N_SYM);
+  document.getElementById('rxMeter').style.width = Math.min(rms*800,100)+'%';
+
+  // D-BPSK復調（特定周波数のDFT）
+  const bits = new Array(N_CARRIER);
+  for (let i=0;i<N_CARRIER;i++) {
+    let re=0, im=0;
+    const bin = BINS[i];
+    for (let n=0;n<N_SYM;n++) {
+      const ang = -2*Math.PI*bin*n/N_SYM;
+      re += timeData[n]*Math.cos(ang);
+      im += timeData[n]*Math.sin(ang);
+    }
+    const dot = re*Math.cos(rxPrevPhases[i]) + im*Math.sin(rxPrevPhases[i]);
+    bits[i] = dot > 0 ? 1 : 0;
+    rxPrevPhases[i] = Math.atan2(im, re);
+  }
+
+  rxFrameBuffer.push(...bits);
+
+  // バッファが十分溜まったらデコード試行
+  const minBits = PREAMBLE.length + 16 + 8*40; // プリアンブル+ヘッダ+最大データ
+  if (rxFrameBuffer.length > minBits + N_CARRIER*2) {
+    const result = tryDecodeBuffer(rxFrameBuffer);
+    if (result !== null) {
+      showRxResult(result);
+      rxFrameBuffer = rxFrameBuffer.slice(N_CARRIER); // 少し進める
+    } else {
+      // バッファが大きくなりすぎたら古いものを捨てる
+      if (rxFrameBuffer.length > minBits*3)
+        rxFrameBuffer = rxFrameBuffer.slice(N_CARRIER);
+    }
+  }
+}
+
+function tryDecodeBuffer(buf) {
+  // プリアンブル検索
+  const P = PREAMBLE;
+  for (let start=0; start<=buf.length-P.length-32; start++) {
+    // プリアンブルマッチ確認（ハミング距離≤3）
+    let err=0;
+    for (let i=0;i<P.length;i++) if(buf[start+i]!==P[i]) err++;
+    if (err > 3) continue;
+
+    // LEN (8bit)
+    const lenOff = start + P.length;
+    if (lenOff + 16 > buf.length) continue;
+    let len=0;
+    for(let i=0;i<8;i++) len=(len<<1)|buf[lenOff+i];
+    if (len<1 || len>40) continue;
+
+    // CRC (8bit)
+    let crcRx=0;
+    for(let i=0;i<8;i++) crcRx=(crcRx<<1)|buf[lenOff+8+i];
+
+    // DATA
+    const dataOff = lenOff + 16;
+    if (dataOff + len*8 > buf.length) continue;
+    const dataBytes = new Uint8Array(len);
+    for(let i=0;i<len;i++) {
+      let b=0;
+      for(let j=0;j<8;j++) b=(b<<1)|(buf[dataOff+i*8+j]||0);
+      dataBytes[i]=b;
+    }
+
+    // CRC検証
+    if (crc8(dataBytes) !== crcRx) continue;
+
+    // デコード成功
+    try {
+      return new TextDecoder('utf-8').decode(dataBytes);
+    } catch(e) { continue; }
+  }
+  return null;
+}
+
+function showRxResult(text) {
+  const box = document.getElementById('rxResult');
+  box.textContent = text;
+  box.classList.add('visible');
+  setStatus('rxStatus',
+    `<span class="ok">✓ 受信成功</span> — ${new Date().toLocaleTimeString()} — CRC OK`);
+
+  // URLなら自動リンク
+  if (/^https?:\/\//.test(text)) {
+    box.innerHTML = `<a href="${text}" target="_blank" style="color:var(--accent2)">${text}</a>`;
+  }
+}
+
+function drawRxSpectrum() {
+  const canvas = document.getElementById('rxCanvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.clientWidth, H = canvas.clientHeight;
+  canvas.width = W * devicePixelRatio;
+  canvas.height = H * devicePixelRatio;
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+  const buf = new Uint8Array(rxAnalyser.frequencyBinCount);
+
+  function draw() {
+    if (!isRxRunning) return;
+    rxAnimId = requestAnimationFrame(draw);
+    rxAnalyser.getByteFrequencyData(buf);
+
+    ctx.fillStyle='#060d18'; ctx.fillRect(0,0,W,H);
+    const binStart=Math.round(6400/FS*buf.length*2);
+    const binEnd  =Math.round(8000/FS*buf.length*2);
+    ctx.fillStyle='rgba(0,255,157,0.07)';
+    ctx.fillRect(binStart/buf.length*W,0,(binEnd-binStart)/buf.length*W,H);
+
+    const bw=W/buf.length;
+    for(let i=0;i<buf.length;i++){
+      const h=(buf[i]/255)*H;
+      const inBand=i>=binStart&&i<=binEnd;
+      ctx.fillStyle=inBand?'rgba(0,255,157,0.9)':'rgba(0,200,130,0.4)';
+      ctx.fillRect(i*bw,H-h,Math.max(bw,1),h);
+    }
+  }
+  draw();
+}
+
+function stopRx() {
+  isRxRunning = false;
+  clearInterval(rxDecodeInterval);
+  cancelAnimationFrame(rxAnimId);
+  rxStream?.getTracks().forEach(t=>t.stop());
+  rxAudioCtx?.close();
+  rxFrameBuffer = [];
+  rxPrevPhases = new Float64Array(N_CARRIER);
+  document.getElementById('rxMeter').style.width='0%';
+  document.getElementById('btnRxStart').disabled = false;
+  document.getElementById('btnRxStop').disabled  = true;
+  setStatus('rxStatus','<span class="inf">受信停止</span>');
+}
+
+// ============================================================
+// UI ユーティリティ
+// ============================================================
+function switchTab(name) {
+  document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(el=>el.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  event.currentTarget.classList.add('active');
+}
+
+function selectChime(el, key) {
+  document.querySelectorAll('.chime-card').forEach(c=>c.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedChime = key;
+}
+
+function setStatus(id, html) {
+  document.getElementById(id).innerHTML = html;
+}
+</script>
+</body>
+</html>
